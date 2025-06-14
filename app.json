@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "my-app",
+    "slug": "mdme",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "build": {
+        "babel": {
+          "include": []
+        }
+      }
+    },
+    "platforms": ["ios", "android", "web"],
+
+    "extra": {
+      "eas": {
+        "projectId": "055c5d82-1a6e-4335-8861-ba95969d9f93"
+      }
+    },
+
+    "owner": "awful_lumos",
+
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+
+    "updates": {
+      "url": "https://u.expo.dev/055c5d82-1a6e-4335-8861-ba95969d9f93"
+    }
+  }
+}
