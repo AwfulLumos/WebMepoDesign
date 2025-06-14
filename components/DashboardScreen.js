@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../contexts/AuthContext";
 import supabase from "../supabaseClient";
 
 const DashboardScreen = () => {
@@ -20,8 +21,10 @@ const DashboardScreen = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
   const [screenData, setScreenData] = useState(Dimensions.get("window"));
+  const [loading, setLoading] = useState(true);
 
   const navigation = useNavigation();
+  const { user } = useAuth();
   const animation = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -72,28 +75,49 @@ We're making sure your experience is smooth, convenient, and hassle-free. Keep a
   const isMediumScreen = screenData.width >= 768;
 
   const getCardWidth = () => {
-    if (isLargeScreen) return "23%"; // 4 columns on large screens
-    if (isMediumScreen) return "31%"; // 3 columns on medium screens
-    return "48%"; // 2 columns on small screens
+    if (isLargeScreen) return "23%";
+    if (isMediumScreen) return "31%";
+    return "48%";
   };
 
-  // Fetch payments
+  // Fetch payments for the logged-in user
   useEffect(() => {
     const fetchPayments = async () => {
-      const { data, error } = await supabase
-        .from("payment")
-        .select("*")
-        .order("payment_date", { ascending: false });
+      if (!user?.registrationId) {
+        console.log("No user registration ID found");
+        setLoading(false);
+        return;
+      }
 
-      if (error) {
-        console.error("Error fetching payments:", error);
-      } else {
-        setPayments(data);
+      try {
+        setLoading(true);
+
+        console.log("User registration ID:", user.registrationId);
+
+        // Query payments filtered by the user's applicant_id
+        const { data, error } = await supabase
+          .from("payment")
+          .select("*")
+          .eq("applicant_id", user.registrationId) // Filter by user's registration ID using applicant_id column
+          .order("payment_date", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching payments:", error);
+          setPayments([]);
+        } else {
+          console.log("Fetched payments for user:", data);
+          setPayments(data || []);
+        }
+      } catch (error) {
+        console.error("Error in fetchPayments:", error);
+        setPayments([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchPayments();
-  }, []);
+  }, [user?.registrationId]); // Re-fetch when user changes
 
   // Auto-rotate announcements
   useEffect(() => {
@@ -132,6 +156,15 @@ We're making sure your experience is smooth, convenient, and hassle-free. Keep a
   });
 
   const styles = getStyles(isLargeScreen, isMediumScreen, getCardWidth());
+
+  // Function to render empty state
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyStateText}>
+        {loading ? "Loading transactions..." : "No transactions found"}
+      </Text>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container}>
@@ -199,20 +232,25 @@ We're making sure your experience is smooth, convenient, and hassle-free. Keep a
           <Text style={styles.headerText}>Type</Text>
         </View>
 
-        <FlatList
-          data={payments}
-          keyExtractor={(item) => item.payment_id.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.tableRow}>
-              <Text style={styles.rowText}>
-                ₱{parseFloat(item.payment_amount).toLocaleString()}
-              </Text>
-              <Text style={styles.rowText}>{item.payment_date}</Text>
-              <Text style={styles.rowText}>{item.payment_status}</Text>
-              <Text style={styles.rowText}>{item.payment_type}</Text>
-            </View>
-          )}
-        />
+        {payments.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <FlatList
+            data={payments}
+            keyExtractor={(item) => item.payment_id.toString()}
+            renderItem={({ item }) => (
+              <View style={styles.tableRow}>
+                <Text style={styles.rowText}>
+                  ₱{parseFloat(item.payment_amount).toLocaleString()}
+                </Text>
+                <Text style={styles.rowText}>{item.payment_date}</Text>
+                <Text style={styles.rowText}>{item.payment_status}</Text>
+                <Text style={styles.rowText}>{item.payment_type}</Text>
+              </View>
+            )}
+            scrollEnabled={false} // Disable FlatList scrolling since it's inside ScrollView
+          />
+        )}
       </View>
 
       {/* Announcements */}
@@ -368,6 +406,16 @@ const getStyles = (isLargeScreen, isMediumScreen, cardWidth) =>
       textAlign: "center",
       fontSize: isLargeScreen ? 14 : 13,
       color: "#333",
+    },
+    emptyState: {
+      padding: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyStateText: {
+      fontSize: isLargeScreen ? 16 : 14,
+      color: "#666",
+      fontStyle: "italic",
     },
     announcementContent: {
       flexDirection: "column",

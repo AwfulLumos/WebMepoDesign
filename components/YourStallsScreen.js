@@ -13,10 +13,10 @@ import {
   StyleSheet,
 } from "react-native";
 import supabase from "../supabaseClient";
+import { useAuth } from "../contexts/AuthContext";
 
-const YourStallsScreen = ({ route, registrantId }) => {
-  // Hardcode registrantId to 1 for testing (remove this when you add login)
-  const actualRegistrantId = 1;
+const YourStallsScreen = ({ route }) => {
+  const { user, isLoggedIn, isLoading: authLoading } = useAuth();
   const [yourStalls, setYourStalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -26,7 +26,6 @@ const YourStallsScreen = ({ route, registrantId }) => {
 
   const animation = useRef(new Animated.Value(0)).current;
 
-  // Handle screen dimension changes
   useEffect(() => {
     const onChange = (result) => {
       setScreenData(result.window);
@@ -36,46 +35,48 @@ const YourStallsScreen = ({ route, registrantId }) => {
     return () => subscription?.remove();
   }, []);
 
-  // Determine layout based on screen width
   const isLargeScreen = screenData.width >= 1024;
   const isMediumScreen = screenData.width >= 768;
 
   useEffect(() => {
     const fetchStalls = async () => {
-      // Check if registrantId is valid before making the API call
-      if (
-        !actualRegistrantId ||
-        actualRegistrantId === undefined ||
-        actualRegistrantId === null
-      ) {
-        console.error(
-          "registrantId is required but not provided:",
-          actualRegistrantId
-        );
+      // Wait for auth to load and check if user is logged in
+      if (authLoading) {
+        return; // Still loading auth state
+      }
+
+      if (!isLoggedIn || !user || !user.registrationId) {
+        console.log("User not logged in or registrationId not available");
+        setYourStalls([]); // Set empty array when no user
         setLoading(false);
         return;
       }
 
       try {
+        console.log("Fetching stalls for registrationId:", user.registrationId);
+
         const { data, error } = await supabase
           .from("stall")
           .select("*")
-          .eq("registrant_id", actualRegistrantId);
+          .eq("registrant_id", user.registrationId);
 
         if (error) {
           console.error("Error fetching stalls:", error);
+          setYourStalls([]);
         } else {
+          console.log("Fetched stalls:", data);
           setYourStalls(data || []);
         }
       } catch (err) {
         console.error("Unexpected error:", err);
+        setYourStalls([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchStalls();
-  }, [actualRegistrantId]);
+  }, [user, isLoggedIn, authLoading]);
 
   const toggleDescription = () => {
     Animated.timing(animation, {
@@ -105,39 +106,53 @@ const YourStallsScreen = ({ route, registrantId }) => {
 
   const styles = getStyles(isLargeScreen, isMediumScreen, screenData);
 
-  // Show error state if registrantId is not provided
-  if (
-    !actualRegistrantId ||
-    actualRegistrantId === undefined ||
-    actualRegistrantId === null
-  ) {
+  // Show loading while auth is loading
+  if (authLoading || loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#002181" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Show error state if user is not logged in
+  if (!isLoggedIn || !user) {
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
-            Unable to load stalls: User ID not found
+            Please log in to view your stalls
           </Text>
           <Text style={styles.errorSubtext}>
-            Please make sure you are logged in properly
+            You need to be logged in to access this feature
           </Text>
         </View>
       </View>
     );
   }
 
-  if (loading) {
+  // Show error state if registrationId is not available
+  if (!user.registrationId) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#002181" />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            Unable to load stalls: User registration ID not found
+          </Text>
+          <Text style={styles.errorSubtext}>
+            Please contact support if this issue persists
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header - Updated to match DashboardScreen */}
       <View style={styles.headerContainer}>
         <Text style={styles.header}>Your Stalls</Text>
+        <Text style={styles.userInfo}>Welcome, {user.fullName}</Text>
         <TouchableOpacity
           onPress={toggleDescription}
           style={styles.dropdownHeader}
@@ -269,6 +284,11 @@ const getStyles = (isLargeScreen, isMediumScreen, screenData) =>
       fontWeight: "bold",
       color: "#ffffff",
     },
+    userInfo: {
+      fontSize: isLargeScreen ? 16 : 14,
+      color: "#e0e0e0",
+      marginTop: 5,
+    },
     dropdownHeader: {
       marginTop: 12,
       cursor: "pointer",
@@ -285,6 +305,12 @@ const getStyles = (isLargeScreen, isMediumScreen, screenData) =>
       fontSize: isLargeScreen ? 16 : 14,
       color: "#000",
       lineHeight: isLargeScreen ? 22 : 20,
+    },
+    loadingText: {
+      marginTop: 10,
+      textAlign: "center",
+      color: "#666",
+      fontSize: isLargeScreen ? 16 : 14,
     },
     card: {
       backgroundColor: "#ffffff",
