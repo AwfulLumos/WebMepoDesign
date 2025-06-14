@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable import/no-unresolved */
 import React, { useState } from "react";
 import { View, StyleSheet } from "react-native";
