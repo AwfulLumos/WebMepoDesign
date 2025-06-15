@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   TouchableOpacity,
   View,
@@ -19,10 +19,50 @@ const ProfileScreen = ({ navigation }) => {
   const [profileData, setProfileData] = useState(null);
   const { user } = useAuth();
 
-  const fetchProfileData = async () => {
+  const fetchProfileData = useCallback(async () => {
     try {
       if (!user || !user.registrationId) {
         console.error("No authenticated user or registration ID found");
+        return;
+      }
+
+      console.log("Fetching profile for registration_id:", user.registrationId);
+
+      const { data: registrantData, error: registrantError } = await supabase
+        .from("registrant")
+        .select("*")
+        .eq("registration_id", user.registrationId);
+
+      console.log("Registrant data:", registrantData);
+      console.log("Registrant error:", registrantError);
+
+      if (!registrantData || registrantData.length === 0) {
+        console.log(
+          "No registrant found, creating basic profile from auth data"
+        );
+        setProfileData({
+          name: user.fullName,
+          email: user.email,
+          registrationId: user.registrationId,
+          address: null,
+          contact: null,
+          username: null,
+          password: null,
+          birthDate: null,
+          civilStatus: null,
+          education: null,
+          businessNature: null,
+          capitalization: null,
+          sourceOfCapital: null,
+          stallNo: null,
+          stallLocation: null,
+          stallDescription: null,
+          spouseName: null,
+          spouseBirthDate: null,
+          spouseEducation: null,
+          spouseOccupation: null,
+          children: [],
+        });
         return;
       }
 
@@ -57,8 +97,35 @@ const ProfileScreen = ({ navigation }) => {
         )
         .eq("registration_id", user.registrationId);
 
+      console.log("Applicant query result:", data);
+      console.log("Applicant query error:", error);
+
       if (error) {
-        console.error("Error fetching profile:", error);
+        console.error("Error fetching applicant profile:", error);
+        const registrant = registrantData[0];
+        setProfileData({
+          registrant_id: registrant.id,
+          name: registrant.full_name,
+          address: registrant.address,
+          contact: registrant.contact_number,
+          username: registrant.user_name,
+          email: registrant.email,
+          password: registrant.password,
+          birthDate: null,
+          civilStatus: null,
+          education: null,
+          businessNature: null,
+          capitalization: null,
+          sourceOfCapital: null,
+          stallNo: null,
+          stallLocation: null,
+          stallDescription: null,
+          spouseName: null,
+          spouseBirthDate: null,
+          spouseEducation: null,
+          spouseOccupation: null,
+          children: [],
+        });
         return;
       }
 
@@ -67,11 +134,11 @@ const ProfileScreen = ({ navigation }) => {
 
         setProfileData({
           registrant_id: applicant.registrant?.id,
-          name: applicant.registrant?.full_name,
+          name: applicant.registrant?.full_name || user.fullName,
           address: applicant.registrant?.address,
           contact: applicant.registrant?.contact_number,
           username: applicant.registrant?.user_name,
-          email: applicant.registrant?.email,
+          email: applicant.registrant?.email || user.email,
           password: applicant.registrant?.password,
 
           birthDate: applicant.registrant_birth_date,
@@ -93,18 +160,83 @@ const ProfileScreen = ({ navigation }) => {
           children: applicant.spouse_information?.names_of_children || [],
         });
       } else {
-        console.log("No profile data found for this user");
-        setProfileData(null);
+        console.log("No applicant data found, using registrant data only");
+        const registrant = registrantData[0];
+        setProfileData({
+          registrant_id: registrant.id,
+          name: registrant.full_name,
+          address: registrant.address,
+          contact: registrant.contact_number,
+          username: registrant.user_name,
+          email: registrant.email,
+          password: registrant.password,
+          birthDate: null,
+          civilStatus: null,
+          education: null,
+          businessNature: null,
+          capitalization: null,
+          sourceOfCapital: null,
+          stallNo: null,
+          stallLocation: null,
+          stallDescription: null,
+          spouseName: null,
+          spouseBirthDate: null,
+          spouseEducation: null,
+          spouseOccupation: null,
+          children: [],
+        });
       }
     } catch (error) {
       console.error("Error in fetchProfileData:", error);
     }
+  }, [user]); // Now fetchProfileData depends on user
+
+  // Helper function to check if application data exists
+  const hasApplicationData = () => {
+    if (!profileData) return false;
+    return !!(
+      profileData.birthDate ||
+      profileData.civilStatus ||
+      profileData.education ||
+      profileData.businessNature ||
+      profileData.capitalization ||
+      profileData.sourceOfCapital
+    );
   };
+
+  // Helper function to check if stall data exists
+  const hasStallData = () => {
+    if (!profileData) return false;
+    return !!(
+      profileData.stallNo ||
+      profileData.stallLocation ||
+      profileData.stallDescription
+    );
+  };
+
+  // Helper function to check if spouse data exists
+  const hasSpouseData = () => {
+    if (!profileData) return false;
+    return !!(
+      profileData.spouseName ||
+      profileData.spouseBirthDate ||
+      profileData.spouseEducation ||
+      profileData.spouseOccupation ||
+      (profileData.children && profileData.children.length > 0)
+    );
+  };
+
+  const NoDataMessage = ({ message = "No data found" }) => (
+    <View style={styles.noDataContainer}>
+      <Icon name="information-outline" size={24} color="#999" />
+      <Text style={styles.noDataText}>{message}</Text>
+    </View>
+  );
 
   useFocusEffect(
     React.useCallback(() => {
       fetchProfileData();
-    }, [user])
+    }, [fetchProfileData])
   );
 
   if (!user) {
@@ -185,7 +317,6 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.label}>Contact Number:</Text>
             <Text style={styles.value}>{profileData.contact}</Text>
           </View>
-
           <View style={styles.infoRow}>
             <Text style={styles.label}>Username:</Text>
             <Text style={styles.value}>{profileData.username}</Text>
@@ -202,38 +333,50 @@ const ProfileScreen = ({ navigation }) => {
             <Icon name="file-document" size={24} color="#3700b3" />
             <Text style={styles.sectionTitle}>Application Information</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Birth Date:</Text>
-            <Text style={styles.value}>{profileData.birthDate || "N/A"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Civil Status:</Text>
-            <Text style={styles.value}>{profileData.civilStatus || "N/A"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Educational Attainment:</Text>
-            <Text style={styles.value}>{profileData.education || "N/A"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Nature of Business:</Text>
-            <Text style={styles.value}>
-              {profileData.businessNature || "N/A"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Capitalization:</Text>
-            <Text style={styles.value}>
-              {profileData.capitalization
-                ? `₱${profileData.capitalization}`
-                : "N/A"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Source of Capital:</Text>
-            <Text style={styles.value}>
-              {profileData.sourceOfCapital || "N/A"}
-            </Text>
-          </View>
+          {hasApplicationData() ? (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Birth Date:</Text>
+                <Text style={styles.value}>
+                  {profileData.birthDate || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Civil Status:</Text>
+                <Text style={styles.value}>
+                  {profileData.civilStatus || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Educational Attainment:</Text>
+                <Text style={styles.value}>
+                  {profileData.education || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Nature of Business:</Text>
+                <Text style={styles.value}>
+                  {profileData.businessNature || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Capitalization:</Text>
+                <Text style={styles.value}>
+                  {profileData.capitalization
+                    ? `₱${profileData.capitalization}`
+                    : "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Source of Capital:</Text>
+                <Text style={styles.value}>
+                  {profileData.sourceOfCapital || "N/A"}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <NoDataMessage message="No application data found" />
+          )}
         </View>
 
         {/* Stall Information */}
@@ -242,22 +385,28 @@ const ProfileScreen = ({ navigation }) => {
             <Icon name="store" size={24} color="#3700b3" />
             <Text style={styles.sectionTitle}>Stall Information</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Stall No:</Text>
-            <Text style={styles.value}>{profileData.stallNo || "N/A"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Location:</Text>
-            <Text style={styles.value}>
-              {profileData.stallLocation || "N/A"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Description:</Text>
-            <Text style={styles.value}>
-              {profileData.stallDescription || "N/A"}
-            </Text>
-          </View>
+          {hasStallData() ? (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Stall No:</Text>
+                <Text style={styles.value}>{profileData.stallNo || "N/A"}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Location:</Text>
+                <Text style={styles.value}>
+                  {profileData.stallLocation || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Description:</Text>
+                <Text style={styles.value}>
+                  {profileData.stallDescription || "N/A"}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <NoDataMessage message="No stall data found" />
+          )}
         </View>
 
         {/* Spouse Information */}
@@ -266,36 +415,44 @@ const ProfileScreen = ({ navigation }) => {
             <Icon name="account-heart" size={24} color="#3700b3" />
             <Text style={styles.sectionTitle}>Spouse Information</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Name:</Text>
-            <Text style={styles.value}>{profileData.spouseName || "N/A"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Birth Date:</Text>
-            <Text style={styles.value}>
-              {profileData.spouseBirthDate || "N/A"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Education:</Text>
-            <Text style={styles.value}>
-              {profileData.spouseEducation || "N/A"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Occupation:</Text>
-            <Text style={styles.value}>
-              {profileData.spouseOccupation || "N/A"}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Children:</Text>
-            <Text style={styles.value}>
-              {profileData.children.length > 0
-                ? profileData.children.join(", ")
-                : "None"}
-            </Text>
-          </View>
+          {hasSpouseData() ? (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Name:</Text>
+                <Text style={styles.value}>
+                  {profileData.spouseName || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Birth Date:</Text>
+                <Text style={styles.value}>
+                  {profileData.spouseBirthDate || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Education:</Text>
+                <Text style={styles.value}>
+                  {profileData.spouseEducation || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Occupation:</Text>
+                <Text style={styles.value}>
+                  {profileData.spouseOccupation || "N/A"}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Children:</Text>
+                <Text style={styles.value}>
+                  {profileData.children.length > 0
+                    ? profileData.children.join(", ")
+                    : "None"}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <NoDataMessage message="No spouse data found" />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -445,6 +602,24 @@ const styles = StyleSheet.create({
     flex: 2,
     textAlign: "right",
     flexWrap: "wrap",
+  },
+  noDataContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 15,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e9ecef",
+    borderStyle: "dashed",
+  },
+  noDataText: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
+    marginLeft: 8,
   },
 });
 
